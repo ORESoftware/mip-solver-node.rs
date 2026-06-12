@@ -3588,7 +3588,7 @@ async fn record_pg_result(
         Ok(_) => true,
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver postgres {label} failed: {error}");
+            tracing::error!("mip solver postgres {label} failed: {error}");
             false
         }
     }
@@ -3960,7 +3960,7 @@ async fn load_session_model(state: &AppState, session_id: &str) -> Option<LiveSe
         }
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver session load failed for {session_id}: {error}");
+            tracing::error!("mip solver session load failed for {session_id}: {error}");
             if let Some(session) = load_redis_session_model(state, session_id).await {
                 return Some(remember_session_model(state, session_id, session));
             }
@@ -4069,7 +4069,7 @@ async fn redis_set_json(state: &AppState, key: String, value: Value) {
         Ok(payload) => payload,
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver redis payload serialization failed for {key}: {error}");
+            tracing::error!("mip solver redis payload serialization failed for {key}: {error}");
             return;
         }
     };
@@ -4077,7 +4077,7 @@ async fn redis_set_json(state: &AppState, key: String, value: Value) {
         Ok(connection) => connection,
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver redis connection failed for {key}: {error}");
+            tracing::error!("mip solver redis connection failed for {key}: {error}");
             return;
         }
     };
@@ -4090,7 +4090,7 @@ async fn redis_set_json(state: &AppState, key: String, value: Value) {
         .await;
     if let Err(error) = result {
         state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-        eprintln!("mip solver redis SET failed for {key}: {error}");
+        tracing::error!("mip solver redis SET failed for {key}: {error}");
     }
 }
 
@@ -4102,7 +4102,7 @@ async fn redis_get_json(state: &AppState, key: String) -> Option<Value> {
         Ok(connection) => connection,
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver redis connection failed for {key}: {error}");
+            tracing::error!("mip solver redis connection failed for {key}: {error}");
             return None;
         }
     };
@@ -4115,7 +4115,7 @@ async fn redis_get_json(state: &AppState, key: String) -> Option<Value> {
         Ok(None) => return None,
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver redis GET failed for {key}: {error}");
+            tracing::error!("mip solver redis GET failed for {key}: {error}");
             return None;
         }
     };
@@ -4123,7 +4123,7 @@ async fn redis_get_json(state: &AppState, key: String) -> Option<Value> {
         Ok(value) => Some(value),
         Err(error) => {
             state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-            eprintln!("mip solver redis payload parse failed for {key}: {error}");
+            tracing::error!("mip solver redis payload parse failed for {key}: {error}");
             None
         }
     }
@@ -4456,7 +4456,7 @@ async fn release_redis_coordination_lock(state: &AppState, key: &str, token: &st
     let mut connection = match client.get_multiplexed_async_connection().await {
         Ok(connection) => connection,
         Err(error) => {
-            eprintln!("mip solver redis coordination release connection failed for {key}: {error}");
+            tracing::error!("mip solver redis coordination release connection failed for {key}: {error}");
             return false;
         }
     };
@@ -4474,7 +4474,7 @@ async fn release_redis_coordination_lock(state: &AppState, key: &str, token: &st
     match result {
         Ok(deleted) => deleted == 1,
         Err(error) => {
-            eprintln!("mip solver redis coordination release failed for {key}: {error}");
+            tracing::error!("mip solver redis coordination release failed for {key}: {error}");
             false
         }
     }
@@ -4532,14 +4532,14 @@ async fn release_live_mutex_coordination_lock(
     {
         Ok(value) => value,
         Err(error) => {
-            eprintln!("mip solver live-mutex release failed for {key}: {error}");
+            tracing::error!("mip solver live-mutex release failed for {key}: {error}");
             return false;
         }
     };
     let response: LiveMutexUnlockResponse = match serde_json::from_value(value) {
         Ok(response) => response,
         Err(error) => {
-            eprintln!("mip solver live-mutex release parse failed for {key}: {error}");
+            tracing::error!("mip solver live-mutex release parse failed for {key}: {error}");
             return false;
         }
     };
@@ -4547,7 +4547,7 @@ async fn release_live_mutex_coordination_lock(
         true
     } else {
         let detail = response.error.unwrap_or_else(|| "not unlocked".to_string());
-        eprintln!("mip solver live-mutex release failed for {key}: {detail}");
+        tracing::error!("mip solver live-mutex release failed for {key}: {detail}");
         false
     }
 }
@@ -7216,7 +7216,7 @@ async fn run_worker_heartbeat(
 
 async fn run_slave(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
     let Some(nats) = state.nats.clone() else {
-        eprintln!("slave role requires NATS_URL");
+        tracing::error!("slave role requires NATS_URL");
         return Ok(());
     };
     let consumer_name = env_value("MIP_SOLVER_NATS_CONSUMER", MIP_SOLVER_WORKERS_QUEUE_GROUP);
@@ -7257,14 +7257,14 @@ async fn run_slave(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
         let message = match message {
             Ok(message) => message,
             Err(error) => {
-                eprintln!("mip solver worker message fetch failed: {error}");
+                tracing::error!("mip solver worker message fetch failed: {error}");
                 continue;
             }
         };
         let job = match serde_json::from_slice::<SubproblemJob>(&message.payload) {
             Ok(job) => job,
             Err(error) => {
-                eprintln!("invalid mip solver job payload: {error}");
+                tracing::error!("invalid mip solver job payload: {error}");
                 let _ = message.ack().await;
                 continue;
             }
@@ -7415,7 +7415,7 @@ async fn run_slave(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
                         break match joined {
                             Ok(result) => result,
                             Err(error) => {
-                                eprintln!("mip solver worker task failed: {error}");
+                                tracing::error!("mip solver worker task failed: {error}");
                                     let _ = message
                                         .ack_with(async_nats::jetstream::AckKind::Nak(Some(
                                             Duration::from_secs(5),
@@ -7496,7 +7496,7 @@ async fn run_slave(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
                         .metrics
                         .errors_total
                         .fetch_add(1, Ordering::Relaxed);
-                    eprintln!("mip solver result serialization failed: {error}");
+                    tracing::error!("mip solver result serialization failed: {error}");
                     let _ = message
                         .ack_with(async_nats::jetstream::AckKind::Nak(Some(
                             Duration::from_secs(5),
@@ -7514,7 +7514,7 @@ async fn run_slave(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
                     .metrics
                     .errors_total
                     .fetch_add(1, Ordering::Relaxed);
-                eprintln!("publish subproblem result failed: {error}");
+                tracing::error!("publish subproblem result failed: {error}");
                 let _ = message
                     .ack_with(async_nats::jetstream::AckKind::Nak(Some(
                         Duration::from_secs(5),
@@ -7543,7 +7543,7 @@ async fn run_slave(state: AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
                 .fetch_add(1, Ordering::Relaxed);
             track_runtime_task_finished(&state_for_task, &task_id_for_task, &result.status);
             if let Err(error) = message.ack().await {
-                eprintln!("mip solver job ack failed: {error}");
+                tracing::error!("mip solver job ack failed: {error}");
             }
         });
         track_runtime_task_abort_handle(&state, &task_id, worker_task.abort_handle());
@@ -7576,13 +7576,13 @@ async fn run_master_control_listener(state: AppState) -> Result<(), Box<dyn Erro
                     Ok(false) => {}
                     Err(error) => {
                         state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-                        eprintln!("mip solver cancel control frame ignored: {error}");
+                        tracing::error!("mip solver cancel control frame ignored: {error}");
                         continue;
                     }
                 }
                 if let Err(error) = record_worker_control_frame(&state, &frame) {
                     state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-                    eprintln!("mip solver control frame ignored: {error}");
+                    tracing::error!("mip solver control frame ignored: {error}");
                 } else {
                     state
                         .metrics
@@ -7592,7 +7592,7 @@ async fn run_master_control_listener(state: AppState) -> Result<(), Box<dyn Erro
             }
             Err(error) => {
                 state.metrics.errors_total.fetch_add(1, Ordering::Relaxed);
-                eprintln!("invalid mip solver control payload: {error}");
+                tracing::error!("invalid mip solver control payload: {error}");
             }
         }
     }
@@ -7609,12 +7609,12 @@ async fn connect_nats() -> Option<async_nats::Client> {
         match async_nats::connect(url.clone()).await {
             Ok(client) => {
                 if attempt > 1 {
-                    eprintln!("connected to NATS at {url} after {attempt} attempts");
+                    tracing::error!("connected to NATS at {url} after {attempt} attempts");
                 }
                 return Some(client);
             }
             Err(error) => {
-                eprintln!(
+                tracing::error!(
                     "failed to connect to NATS at {url} on attempt {attempt}/{attempts}: {error}"
                 );
                 if attempt < attempts {
@@ -7633,7 +7633,7 @@ fn connect_redis() -> Option<redis::Client> {
     match redis::Client::open(url.clone()) {
         Ok(client) => Some(client),
         Err(error) => {
-            eprintln!("failed to configure Redis client from {env_key}: {error}");
+            tracing::error!("failed to configure Redis client from {env_key}: {error}");
             None
         }
     }
@@ -7656,7 +7656,7 @@ async fn connect_postgres() -> Option<PgPool> {
     {
         Ok(pool) => Some(pool),
         Err(error) => {
-            eprintln!("failed to connect to Postgres from {env_key}: {error}");
+            tracing::error!("failed to connect to Postgres from {env_key}: {error}");
             None
         }
     }
@@ -7713,7 +7713,7 @@ fn app_router(state: AppState) -> Router {
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(error) = tokio::signal::ctrl_c().await {
-            eprintln!("failed to install Ctrl-C signal handler: {error}");
+            tracing::error!("failed to install Ctrl-C signal handler: {error}");
         }
     };
 
@@ -7725,7 +7725,7 @@ async fn shutdown_signal() {
                     signal.recv().await;
                 }
                 Err(error) => {
-                    eprintln!("failed to install SIGTERM signal handler: {error}");
+                    tracing::error!("failed to install SIGTERM signal handler: {error}");
                     std::future::pending::<()>().await;
                 }
             }
@@ -7744,6 +7744,8 @@ async fn shutdown_signal() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let _otel = dd_telemetry::init("dd-in-house-mip-solver-node");
+
     let role = NodeRole::from_env();
     let node_id = env::var("POD_NAME")
         .or_else(|_| env::var("HOSTNAME"))
@@ -7774,7 +7776,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let control_state = state.clone();
     tokio::spawn(async move {
         if let Err(error) = run_master_control_listener(control_state).await {
-            eprintln!("mip solver control listener stopped: {error}");
+            tracing::error!("mip solver control listener stopped: {error}");
         }
     });
 
@@ -7782,7 +7784,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         let worker_state = state.clone();
         tokio::spawn(async move {
             if let Err(error) = run_slave(worker_state).await {
-                eprintln!("mip solver slave loop stopped: {error}");
+                tracing::error!("mip solver slave loop stopped: {error}");
             }
         });
     }
@@ -7793,8 +7795,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let port = env_value("PORT", "8097");
     let addr: SocketAddr = format!("{host}:{port}").parse()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    println!("{SERVICE_NAME} listening on {addr}");
-    axum::serve(listener, app)
+    tracing::info!("{SERVICE_NAME} listening on {addr}");
+    axum::serve(listener, app.layer(dd_telemetry::http_trace_layer()))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
@@ -9032,7 +9034,7 @@ mod tests {
             .output()
             .is_err()
         {
-            eprintln!("SKIP external HiGHS verification test: highs command not installed");
+            tracing::error!("SKIP external HiGHS verification test: highs command not installed");
             return;
         }
         let state = test_state(NodeRole::Master);
@@ -9241,7 +9243,7 @@ mod tests {
                 options.external_verification_tolerance = Some(1e-6);
                 true
             } else {
-                eprintln!("SKIP 100x150 external HiGHS verification: highs command not installed");
+                tracing::error!("SKIP 100x150 external HiGHS verification: highs command not installed");
                 false
             };
             (options, expect_external_verification)
