@@ -57,8 +57,14 @@ Clarabel is already present through the `des_engine` dependency:
 - DES declares `clarabel = "0.11"`.
 - DES contains `solve_lp_clarabel` in
   `src/des/general/lp.rs`.
-- DES has correctness tests for maximization, equalities, and variable bounds.
-- Those two focused Clarabel tests pass in the current checkout.
+- The DEN-639 implementation in
+  [discrete-event-system.rs#2](https://github.com/ORESoftware/discrete-event-system.rs/pull/2)
+  adds a typed `ClarabelSolveReport`, full-tolerance revalidation, conservative
+  certified bounds, and regression tests. The service integration must depend
+  on that contract rather than interpreting the generic objective directly.
+- Focused Clarabel correctness and bound-safety tests cover maximization,
+  minimization, equalities, variable bounds, status mapping, and near-integral
+  reduced-accuracy results.
 
 The solver node does not currently expose that backend:
 
@@ -69,9 +75,10 @@ The solver node does not currently expose that backend:
 - The DES worker-side MIP relaxation dispatcher consequently cannot select
   Clarabel for branch-and-bound nodes.
 
-The real change would therefore be to promote and harden the existing DES
-adapter, then expose it through the service. It is not necessary to introduce a
-completely new solver stack.
+The remaining service change is therefore to expose the hardened DES adapter
+under an explicit policy. It is not necessary to introduce a completely new
+solver stack. DEN-654 owns that root-first service integration and remains
+separate from this status-safety change.
 
 ## Production-readiness gaps
 
@@ -80,14 +87,34 @@ production MIP-relaxation backend without addressing the following points.
 
 ### Status and MIP-bound safety
 
-The adapter currently maps Clarabel's `AlmostSolved` status to `LPStatus::Optimal`.
-Clarabel's reduced-accuracy tolerances are intentionally looser than its full
-accuracy tolerances. Treating a reduced-accuracy objective as an exact node
-bound can make branch-and-bound pruning unsafe.
+The DEN-639 contract deliberately keeps Clarabel termination separate from the
+generic `LPStatus`. A result is full accuracy only when Clarabel reports
+`Solved` and the returned point also passes the configured full feasibility and
+duality-gap tolerances against the original DES model. The service must use the
+report's `conservative_bound`; it must never derive a node bound from the
+generic objective when that field is absent.
 
-Before use in IP/MIP solves, the integration should distinguish exact and
-reduced-accuracy termination, validate primal feasibility and the duality gap,
-and apply conservative bound handling.
+| Clarabel status | DES termination | Generic `LPStatus` | Service / MIP behavior |
+| --- | --- | --- | --- |
+| `Solved`, full-tolerance revalidation passes | `FullAccuracy` | `Optimal` | Candidate is available. Use only the conservative bound: widen downward for minimization and upward for maximization. |
+| `Solved`, full-tolerance revalidation fails | `NumericalFailure` | `NumericalError` | No candidate or certified bound; fall back or stop according to request policy. |
+| `AlmostSolved` | `ReducedAccuracy` | `IterLimit` | Diagnostic only; no candidate or certified bound, so it cannot prune an incumbent or subtree. |
+| `AlmostPrimalInfeasible` | `ReducedAccuracy` | `IterLimit` | Do not declare the node infeasible; no certified bound. |
+| `AlmostDualInfeasible` | `ReducedAccuracy` | `IterLimit` | Do not declare the node unbounded; no certified bound. |
+| `MaxIterations` | `IterationLimit` | `IterLimit` | No certified bound; fall back or report the limit. |
+| `MaxTime` | `TimeLimit` | `IterLimit` | No certified bound; preserve the time-limit reason in the typed report. |
+| `PrimalInfeasible` | `Infeasible` | `Infeasible` | The node may be closed as infeasible. |
+| `DualInfeasible` | `Unbounded` | `Unbounded` | Preserve the unbounded result; do not manufacture a finite bound. |
+| `Unsolved` | `NumericalFailure` | `NumericalError` | No candidate or certified bound. |
+| `NumericalError` | `NumericalFailure` | `NumericalError` | No candidate or certified bound. |
+| `InsufficientProgress` | `NumericalFailure` | `NumericalError` | No candidate or certified bound. |
+| `CallbackTerminated` | `NumericalFailure` | `NumericalError` | No candidate or certified bound. |
+
+The conservative full-accuracy bound uses both primal and dual objectives plus
+the absolute gap, relative gap, and primal/dual residuals as a widening guard.
+For every reduced-accuracy or interrupted result, the most conservative bound
+is no bound at all. Branch-and-bound must continue with another relaxation
+backend rather than prune from incomplete evidence.
 
 ### Runtime settings and cancellation
 
