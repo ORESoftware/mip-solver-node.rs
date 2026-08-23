@@ -9316,6 +9316,8 @@ mod tests {
 
     #[test]
     fn nats_subjects_are_generated_mip_solver_namespace() {
+        assert!(dd_nats_subject_defs::NATS_CONTRACT_FINGERPRINT.starts_with("sha256:"));
+        assert_eq!(dd_nats_subject_defs::NATS_CONTRACT_FINGERPRINT.len(), 71);
         let subjects = [
             MIP_SOLVER_JOBS_SUBJECT,
             MIP_SOLVER_RESULTS_SUBJECT,

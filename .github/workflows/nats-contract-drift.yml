@@ -1,0 +1,48 @@
+name: NATS contract drift
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nats-contract-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canonical-rust-binding:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the reviewed MIP solver source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check out the canonical NATS contract
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ORESoftware/k8s-libs-and-shared-defs
+          ref: main
+          path: .ci/k8s-libs-and-shared-defs
+          persist-credentials: false
+
+      - name: Reject a stale vendored Rust binding
+        run: >-
+          cmp
+          vendor/nats-subject-defs/src/lib.rs
+          .ci/k8s-libs-and-shared-defs/nats/subject-defs/generated/rust/src/lib.rs
+
+      - name: Install the contract's minimum Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.85.0
+
+      - name: Compile the synchronized vendored crate
+        run: cargo check --manifest-path vendor/nats-subject-defs/Cargo.toml --locked

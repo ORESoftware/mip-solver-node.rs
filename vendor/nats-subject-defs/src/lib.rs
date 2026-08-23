@@ -3,6 +3,8 @@
 
 #![allow(clippy::needless_return)]
 
+pub const NATS_CONTRACT_FINGERPRINT: &str = "sha256:d4a06c5dfbbf35e1b46b24ecab5d597b3cd69d8946b718903184d639ce0dc9be";
+
 // ---------- Static subjects ----------
 
 /// Per-tick simulation frames fanned out for live demos (grid/agent snapshots and aggregate stats). Broadcast with no queue group so every interested consumer (and the websocket bridge) receives each frame. Default for AGENT_SIM_FRAME_SUBJECT.
@@ -54,6 +56,27 @@ pub const BLOCKCHAIN_INDEX_EVENTS_SUBJECT: &str = "dd.remote.blockchain.index.ev
 /// Monitoring-only MEV/arbitrage spread alerts emitted when an observed venue spread crosses the configured threshold. Default for BLOCKCHAIN_MEV_ALERTS_SUBJECT. Observation surface only; there is no execution path. Publish-only.
 /// Service: dd-contract-service
 pub const BLOCKCHAIN_MEV_ALERTS_SUBJECT: &str = "dd.remote.blockchain.mev.alerts";
+
+/// Shared result fanout receiving every browser-job terminal result.
+/// Service: dd-browser-job-runner
+pub const BROWSER_JOB_RESULTS_SUBJECT: &str = "dd.remote.browser_jobs.results";
+
+/// Redacted build lifecycle events (queued/running/succeeded/failed) published by the build server. Default for BUILD_SERVER_NATS_EVENT_SUBJECT.
+/// Service: dd-build-server
+pub const BUILD_SERVER_EVENTS_SUBJECT: &str = "dd.remote.build_server.events";
+
+/// Redacted container-image registry events (ECR / docker registry webhook pushes) relayed by the build server. Default for BUILD_SERVER_NATS_IMAGE_SUBJECT.
+/// Service: dd-build-server
+pub const BUILD_SERVER_IMAGES_SUBJECT: &str = "dd.remote.build_server.images";
+
+/// Durable build-request intake. Producers publish a build-server.v1 job document; build-server replicas consume via the shared queue group / durable JetStream consumer. Default for BUILD_SERVER_NATS_REQUEST_SUBJECT.
+/// Service: dd-build-server
+pub const BUILD_SERVER_REQUESTS_SUBJECT: &str = "dd.remote.build_server.requests";
+pub const BUILD_SERVER_REQUESTS_QUEUE_GROUP: &str = "dd-build-server";
+
+/// Terminal build results (succeeded/failed with jobId and error summary) for NATS-submitted and webhook-submitted jobs. Default for BUILD_SERVER_NATS_RESULT_SUBJECT.
+/// Service: dd-build-server
+pub const BUILD_SERVER_RESULTS_SUBJECT: &str = "dd.remote.build_server.results";
 
 /// Per-fault lifecycle events (selected, injected, restored, aborted-by-guard) emitted by the chaos loops.
 /// Service: dd-chaos
@@ -161,6 +184,15 @@ pub const DES_RESULTS_SUBJECT: &str = "dd.remote.des.results";
 /// Service: dd-ai-ml-pipeline
 pub const DES_SIMULATE_SUBJECT: &str = "dd.remote.des.simulate";
 pub const DES_SIMULATE_QUEUE_GROUP: &str = "dd-des-simulator";
+
+/// Document conversion requests consumed by dd-document-rs replicas.
+/// Service: dd-document-rs
+pub const DOCUMENT_CONVERT_REQUESTS_SUBJECT: &str = "dd.remote.document.convert";
+pub const DOCUMENT_CONVERT_REQUESTS_QUEUE_GROUP: &str = "dd-document-rs";
+
+/// Document conversion results published after a request completes or fails.
+/// Service: dd-document-rs
+pub const DOCUMENT_CONVERT_RESULTS_SUBJECT: &str = "dd.remote.document.results";
 
 /// Inbound forecast/recommendation requests consumed by the economics server. Subscribed with the dd-economics-server queue group so requests load-balance across replicas. Default for ECONOMICS_FORECAST_REQUEST_SUBJECT.
 /// Service: dd-economics-server
@@ -343,6 +375,22 @@ pub const KNOWLEDGE_GRAPH_RESULTS_SUBJECT: &str = "dd.remote.knowledge_graph.res
 /// Service: dd-knowledge-graph-builder
 pub const KNOWLEDGE_GRAPH_UPDATES_SUBJECT: &str = "dd.remote.knowledge_graph.updates";
 
+/// Terminal event emitted when a durable asynchronous lambda invocation is canceled.
+/// Service: dd-gleam-lambda-runner
+pub const LAMBDA_ASYNC_CANCELED_SUBJECT: &str = "dd.remote.lambda.async.canceled";
+
+/// Dead-letter event emitted after a durable asynchronous lambda invocation exhausts its retry policy.
+/// Service: dd-gleam-lambda-runner
+pub const LAMBDA_ASYNC_DLQ_SUBJECT: &str = "dd.remote.lambda.async.dlq";
+
+/// Retryable failure event emitted for a durable asynchronous lambda invocation.
+/// Service: dd-gleam-lambda-runner
+pub const LAMBDA_ASYNC_FAILURE_SUBJECT: &str = "dd.remote.lambda.async.failure";
+
+/// Terminal event emitted when a durable asynchronous lambda invocation succeeds.
+/// Service: dd-gleam-lambda-runner
+pub const LAMBDA_ASYNC_SUCCESS_SUBJECT: &str = "dd.remote.lambda.async.success";
+
 /// Functions metadata broadcast subject. Default for NATS_LAMBDA_FUNCTIONS_SUBJECT.
 /// Service: dd-gleam-lambda-runner
 pub const LAMBDAS_FUNCTIONS_SUBJECT: &str = "dd.remote.lambdas.functions";
@@ -423,6 +471,15 @@ pub const MUSIC_SONGS_PUBLISHED_SUBJECT: &str = "dd.remote.music.songs.published
 /// Service: dd-music-rs
 pub const MUSIC_VOTES_EVENTS_SUBJECT: &str = "dd.remote.music.votes.events";
 
+/// OCR requests consumed by dd-ocr-rs replicas.
+/// Service: dd-ocr-rs
+pub const OCR_REQUESTS_SUBJECT: &str = "dd.remote.ocr.requests";
+pub const OCR_REQUESTS_QUEUE_GROUP: &str = "dd-ocr-rs";
+
+/// OCR results published after a request completes or fails.
+/// Service: dd-ocr-rs
+pub const OCR_RESULTS_SUBJECT: &str = "dd.remote.ocr.results";
+
 /// Wakeup signal published whenever a new task is enqueued for a thread, so the orchestrator can prepare/scale the matching worker deployment without polling.
 /// Service: dd-remote-rest-api
 pub const ORCHESTRATOR_WAKEUP_SUBJECT: &str = "dd.remote.orchestrator.wakeup";
@@ -431,6 +488,10 @@ pub const ORCHESTRATOR_WAKEUP_STREAM: &str = "DD_REMOTE_CONTROL";
 /// Trend, correlation, grant-match, graph-data, model, and white-paper evidence results from public-data analysis runs.
 /// Service: dd-public-data-server
 pub const PUBLIC_DATA_ANALYSIS_RESULTS_SUBJECT: &str = "dd.remote.public_data.analysis.results";
+
+/// Dead-letter subject for public-data ingest requests that exhaust JetStream delivery attempts.
+/// Service: dd-public-data-server
+pub const PUBLIC_DATA_INGEST_DEAD_LETTER_SUBJECT: &str = "dd.remote.public_data.ingest.deadletter";
 
 /// Inbound public-data ingestion requests accepted over NATS. Payloads mirror the HTTP /ingest and /scrape contracts.
 /// Service: dd-public-data-server
@@ -448,6 +509,23 @@ pub const PUBLIC_DATA_PIPELINE_JOBS_SUBJECT: &str = "dd.remote.public_data.pipel
 /// Raw-but-redacted webhook receipt events from public/primary data providers. Consumers should use this as an audit/event source, not the canonical dataset store.
 /// Service: dd-public-data-server
 pub const PUBLIC_DATA_WEBHOOK_EVENTS_SUBJECT: &str = "dd.remote.public_data.webhooks.events";
+
+/// Opt-in inbound command that wakes one tenant ledger sync loop; replicas load-balance through the Quaestor queue group.
+/// Service: dd-quaestor-web-server
+pub const QUAESTOR_LEDGER_COMMANDS_SUBJECT: &str = "dd.remote.quaestor.ledger.commands.sync";
+pub const QUAESTOR_LEDGER_COMMANDS_QUEUE_GROUP: &str = "dd-quaestor-web-server";
+
+/// Best-effort redacted event emitted when a ledger account relationship is observed.
+/// Service: dd-quaestor-web-server
+pub const QUAESTOR_LEDGER_OBSERVE_SUBJECT: &str = "dd.remote.quaestor.ledger.observe";
+
+/// Best-effort redacted event emitted when an append-only per-account balance proof is produced.
+/// Service: dd-quaestor-web-server
+pub const QUAESTOR_LEDGER_PROVE_SUBJECT: &str = "dd.remote.quaestor.ledger.prove";
+
+/// Best-effort redacted event emitted when a journal line is recorded; memo content is represented only by its SHA-256 digest.
+/// Service: dd-quaestor-web-server
+pub const QUAESTOR_LEDGER_RECORD_SUBJECT: &str = "dd.remote.quaestor.ledger.record";
 
 /// Inbound quantum-simulation requests (a mode plus a circuit, oracle, graph, or Hamiltonian and optional config) consumed by the simulator. Subscribed with the dd-quantum-compute-rs queue group so requests load-balance across replicas. Default for QUANTUM_SOLVE_SUBJECT.
 /// Service: dd-quantum-compute-rs
@@ -533,6 +611,11 @@ pub const TELEMETRY_MDP_SUBJECT: &str = "dd.remote.telemetry.mdp";
 pub const TELEMETRY_RAW_SUBJECT: &str = "dd.remote.telemetry.raw";
 pub const TELEMETRY_RAW_QUEUE_GROUP: &str = "dd-ai-ml-pipeline";
 
+/// Redacted terminal task failures emitted after the queue consumer exhausts JetStream redelivery. Kept on a separate limits-retention stream so poison-message evidence is durable without affecting the WorkQueue consumer lag used by KEDA.
+/// Service: dd-remote-rest-api
+pub const THREAD_TASKS_DEAD_LETTER_SUBJECT: &str = "dd.remote.thread.tasks.deadletter";
+pub const THREAD_TASKS_DEAD_LETTER_STREAM: &str = "DD_REMOTE_TASKS_DLQ";
+
 /// Risk-gated buy/sell/hold decisions emitted by the trading server. Default for TRADING_DECISION_SUBJECT.
 /// Service: dd-trading-server
 pub const TRADING_DECISIONS_SUBJECT: &str = "dd.remote.trading.decisions";
@@ -561,6 +644,82 @@ pub const WORKFLOWS_START_QUEUE_GROUP: &str = "dd-gleam-workflow-engine";
 
 // ---------- Parameterized subjects ----------
 
+/// Per-job lifecycle and progress events emitted by the isolated browser worker.
+/// Service: dd-browser-job-runner
+pub const BROWSER_JOB_EVENTS_PATTERN: &str = "dd.remote.browser_jobs.{job_id}.events";
+pub const BROWSER_JOB_EVENTS_WILDCARD: &str = "dd.remote.browser_jobs.*.events";
+pub fn browser_job_events_subject(job_id: &str) -> String {
+    format!("dd.remote.browser_jobs.{}.events", job_id)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowserJobEventsSubjectParts {
+    pub job_id: String,
+}
+
+pub fn parse_browser_job_events_subject(subject: &str) -> Option<BrowserJobEventsSubjectParts> {
+    let pattern_tokens: &[&str] = &["dd", "remote", "browser_jobs", "{job_id}", "events"];
+    let subject_tokens: Vec<&str> = subject.split('.').collect();
+    let mut job_id: Option<String> = None;
+    let mut si: usize = 0;
+    for tok in pattern_tokens.iter() {
+        if tok.starts_with('{') && tok.ends_with('}') {
+            if si >= subject_tokens.len() { return None; }
+            let name = &tok[1..tok.len()-1];
+            match name {
+                "job_id" => { job_id = Some(subject_tokens[si].to_string()); }
+                _ => return None,
+            }
+            si += 1;
+            continue;
+        }
+        if si >= subject_tokens.len() || subject_tokens[si] != *tok { return None; }
+        si += 1;
+    }
+    if si != subject_tokens.len() { return None; }
+    Some(BrowserJobEventsSubjectParts {
+        job_id: job_id?,
+    })
+}
+
+/// Per-job terminal result emitted by the isolated browser worker.
+/// Service: dd-browser-job-runner
+pub const BROWSER_JOB_RESULT_PATTERN: &str = "dd.remote.browser_jobs.{job_id}.result";
+pub const BROWSER_JOB_RESULT_WILDCARD: &str = "dd.remote.browser_jobs.*.result";
+pub fn browser_job_result_subject(job_id: &str) -> String {
+    format!("dd.remote.browser_jobs.{}.result", job_id)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowserJobResultSubjectParts {
+    pub job_id: String,
+}
+
+pub fn parse_browser_job_result_subject(subject: &str) -> Option<BrowserJobResultSubjectParts> {
+    let pattern_tokens: &[&str] = &["dd", "remote", "browser_jobs", "{job_id}", "result"];
+    let subject_tokens: Vec<&str> = subject.split('.').collect();
+    let mut job_id: Option<String> = None;
+    let mut si: usize = 0;
+    for tok in pattern_tokens.iter() {
+        if tok.starts_with('{') && tok.ends_with('}') {
+            if si >= subject_tokens.len() { return None; }
+            let name = &tok[1..tok.len()-1];
+            match name {
+                "job_id" => { job_id = Some(subject_tokens[si].to_string()); }
+                _ => return None,
+            }
+            si += 1;
+            continue;
+        }
+        if si >= subject_tokens.len() || subject_tokens[si] != *tok { return None; }
+        si += 1;
+    }
+    if si != subject_tokens.len() { return None; }
+    Some(BrowserJobResultSubjectParts {
+        job_id: job_id?,
+    })
+}
+
 /// Per-row change emitted by wal-gateway. Subject pattern is '<prefix>.<schema>.<table>.<op>'. The default prefix is 'cdc' and the default stream name is 'CDC'. Consumers usually subscribe to the prefix tail wildcard ('cdc.>').
 /// Service: dd-wal-gateway
 pub const CDC_ROW_CHANGE_PATTERN: &str = "{prefix}.{schema}.{table}.{op}";
@@ -568,6 +727,10 @@ pub const CDC_ROW_CHANGE_WILDCARD: &str = "{prefix}.>";
 pub const CDC_ROW_CHANGE_STREAM: &str = "CDC";
 pub fn cdc_row_change_subject(prefix: &str, schema: &str, table: &str, op: &str) -> String {
     format!("{}.{}.{}.{}", prefix, schema, table, op)
+}
+
+pub fn format_cdc_row_change_wildcard(prefix: &str) -> String {
+    format!("{}.>", prefix)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -621,6 +784,10 @@ pub fn cdc_table_filter_subject(prefix: &str, schema: &str, table: &str) -> Stri
     format!("{}.{}.{}.>", prefix, schema, table)
 }
 
+pub fn format_cdc_table_filter_wildcard(prefix: &str) -> String {
+    format!("{}.>", prefix)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CdcTableFilterSubjectParts {
     pub prefix: String,
@@ -656,6 +823,45 @@ pub fn parse_cdc_table_filter_subject(subject: &str) -> Option<CdcTableFilterSub
         prefix: prefix?,
         schema: schema?,
         table: table?,
+    })
+}
+
+/// Structured CloudEvents input routed to active lambda bindings. Consumers subscribe to the terminal wildcard; producers publish beneath dd.remote.cloudevents with at least one event token.
+/// Service: dd-gleam-lambda-runner
+pub const CLOUD_EVENTS_INPUT_PATTERN: &str = "dd.remote.cloudevents.{event_type}";
+pub const CLOUD_EVENTS_INPUT_WILDCARD: &str = "dd.remote.cloudevents.>";
+pub const CLOUD_EVENTS_INPUT_QUEUE_GROUP: &str = "dd-gleam-lambda-runner-events";
+pub fn cloud_events_input_subject(event_type: &str) -> String {
+    format!("dd.remote.cloudevents.{}", event_type)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloudEventsInputSubjectParts {
+    pub event_type: String,
+}
+
+pub fn parse_cloud_events_input_subject(subject: &str) -> Option<CloudEventsInputSubjectParts> {
+    let pattern_tokens: &[&str] = &["dd", "remote", "cloudevents", "{event_type}"];
+    let subject_tokens: Vec<&str> = subject.split('.').collect();
+    let mut event_type: Option<String> = None;
+    let mut si: usize = 0;
+    for tok in pattern_tokens.iter() {
+        if tok.starts_with('{') && tok.ends_with('}') {
+            if si >= subject_tokens.len() { return None; }
+            let name = &tok[1..tok.len()-1];
+            match name {
+                "event_type" => { event_type = Some(subject_tokens[si].to_string()); }
+                _ => return None,
+            }
+            si += 1;
+            continue;
+        }
+        if si >= subject_tokens.len() || subject_tokens[si] != *tok { return None; }
+        si += 1;
+    }
+    if si != subject_tokens.len() { return None; }
+    Some(CloudEventsInputSubjectParts {
+        event_type: event_type?,
     })
 }
 
@@ -1005,7 +1211,7 @@ pub fn parse_thread_heartbeat_subject(subject: &str) -> Option<ThreadHeartbeatSu
     })
 }
 
-/// Per-thread task queue. JetStream-backed (DD_REMOTE_TASKS). Producers publish per-thread; consumers either subscribe to the exact subject (the worker for that thread) or to the wildcard via a queue group (the preparer).
+/// Per-thread task queue. JetStream-backed (DD_REMOTE_TASKS) with WorkQueue retention. Producers publish per-thread and queue-consumer replicas share the durable wildcard consumer so each task has one handoff owner.
 /// Service: dd-remote-rest-api
 pub const THREAD_TASKS_PATTERN: &str = "dd.remote.thread.{thread_id}.tasks";
 pub const THREAD_TASKS_WILDCARD: &str = "dd.remote.thread.*.tasks";
@@ -1094,6 +1300,10 @@ pub const AGENT_SIM_SERVER_QUEUE_GROUP: &str = "dd-agent-sim-server";
 /// Service: dd-billing-server
 pub const BILLING_SERVER_QUEUE_GROUP: &str = "dd-billing-server";
 
+/// Shared queue group / durable consumer name used by build-server replicas for request intake.
+/// Service: dd-build-server
+pub const BUILD_SERVER_QUEUE_GROUP: &str = "dd-build-server";
+
 /// Shared queue group used by dd-constraint-scheduler replicas consuming schedule requests.
 /// Service: dd-constraint-scheduler
 pub const CONSTRAINT_SCHEDULER_QUEUE_GROUP: &str = "dd-constraint-scheduler";
@@ -1113,6 +1323,10 @@ pub const DATASET_LABELING_WORKERS_QUEUE_GROUP: &str = "dd-dataset-labeling";
 /// Shared queue group used by dd-data-viz notifier workers consuming the notification-dispatch lane.
 /// Service: dd-data-viz-rs
 pub const DATA_VIZ_NOTIFICATION_DISPATCH_QUEUE_GROUP: &str = "dd-data-viz-notifiers";
+
+/// Shared queue group used by document converter replicas so each request is handled once.
+/// Service: dd-document-rs
+pub const DOCUMENT_CONVERTERS_QUEUE_GROUP: &str = "dd-document-rs";
 
 /// Shared queue group used by dd-economics-server replicas consuming forecast requests.
 /// Service: dd-economics-server
@@ -1134,6 +1348,10 @@ pub const GPU_SCHEDULER_QUEUE_GROUP: &str = "dd-gpu-rs";
 /// Service: dd-knowledge-graph-builder
 pub const KNOWLEDGE_GRAPH_WORKERS_QUEUE_GROUP: &str = "dd-knowledge-graph-builder";
 
+/// Shared queue group used by lambda-runner replicas for structured CloudEvents input.
+/// Service: dd-gleam-lambda-runner
+pub const LAMBDA_EVENTS_QUEUE_GROUP: &str = "dd-gleam-lambda-runner-events";
+
 /// Shared queue group used by lambda-runner replicas.
 /// Service: dd-gleam-lambda-runner
 pub const LAMBDA_RUNNER_QUEUE_GROUP: &str = "dd-gleam-lambda-runner";
@@ -1150,9 +1368,17 @@ pub const MONTE_CARLO_SERVER_QUEUE_GROUP: &str = "dd-monte-carlo-server";
 /// Service: dd-music-rs
 pub const MUSIC_GENERATION_QUEUE_GROUP: &str = "dd-music-rs";
 
+/// Shared queue group used by OCR replicas so each request is handled once.
+/// Service: dd-ocr-rs
+pub const OCR_WORKERS_QUEUE_GROUP: &str = "dd-ocr-rs";
+
 /// Shared queue group used by dd-public-data-server replicas so each queued ingest/scrape request is processed once.
 /// Service: dd-public-data-server
 pub const PUBLIC_DATA_WORKERS_QUEUE_GROUP: &str = "dd-public-data-server";
+
+/// Queue group shared by Quaestor web-server replicas for opt-in ledger sync commands.
+/// Service: dd-quaestor-web-server
+pub const QUAESTOR_WEB_SERVER_QUEUE_GROUP: &str = "dd-quaestor-web-server";
 
 /// Shared queue group used by dd-quantum-compute-rs replicas consuming solve requests.
 /// Service: dd-quantum-compute-rs
@@ -1191,6 +1417,14 @@ pub const CDC_STREAM_SUBJECTS: &[&str] = &["cdc.>"];
 pub const CDC_STREAM_RETENTION: &str = "limits";
 pub const CDC_STREAM_STORAGE: &str = "file";
 pub const CDC_STREAM_ACK: &str = "explicit";
+
+/// JetStream file storage with WorkQueue retention and explicit ack for build-request intake. Dedupe by Nats-Msg-Id ('build-request:<requestId>'); Postgres (dd_build_server) remains the real idempotency guard.
+/// Service: dd-build-server
+pub const DD_REMOTE_BUILD_JOBS_STREAM_NAME: &str = "DD_REMOTE_BUILD_JOBS";
+pub const DD_REMOTE_BUILD_JOBS_STREAM_SUBJECTS: &[&str] = &["dd.remote.build_server.requests"];
+pub const DD_REMOTE_BUILD_JOBS_STREAM_RETENTION: &str = "workqueue";
+pub const DD_REMOTE_BUILD_JOBS_STREAM_STORAGE: &str = "file";
+pub const DD_REMOTE_BUILD_JOBS_STREAM_ACK: &str = "explicit";
 
 /// Short-retention control plane stream.
 /// Service: dd-remote-rest-api
@@ -1232,6 +1466,14 @@ pub const DD_REMOTE_EVOLUTION_STREAM_RETENTION: &str = "limits";
 pub const DD_REMOTE_EVOLUTION_STREAM_STORAGE: &str = "file";
 pub const DD_REMOTE_EVOLUTION_STREAM_ACK: &str = "explicit";
 
+/// Durable JetStream history for fabrication requests, results, machine profiles, design conversion, instruction generation and review, execution telemetry, learning outcomes, and release readiness.
+/// Service: dd-fabrication-server
+pub const DD_REMOTE_FABRICATION_STREAM_NAME: &str = "DD_REMOTE_FABRICATION";
+pub const DD_REMOTE_FABRICATION_STREAM_SUBJECTS: &[&str] = &["dd.remote.fabrication.>"];
+pub const DD_REMOTE_FABRICATION_STREAM_RETENTION: &str = "limits";
+pub const DD_REMOTE_FABRICATION_STREAM_STORAGE: &str = "file";
+pub const DD_REMOTE_FABRICATION_STREAM_ACK: &str = "explicit";
+
 /// JetStream stream for distributed in-house LP/MIP/IP solver work, results, control, and progress events.
 /// Service: dd-ai-ml-pipeline
 pub const DD_REMOTE_MIP_SOLVER_STREAM_NAME: &str = "DD_REMOTE_MIP_SOLVER";
@@ -1248,10 +1490,18 @@ pub const DD_REMOTE_ROUTING_STREAM_RETENTION: &str = "limits";
 pub const DD_REMOTE_ROUTING_STREAM_STORAGE: &str = "file";
 pub const DD_REMOTE_ROUTING_STREAM_ACK: &str = "explicit";
 
-/// JetStream file storage, explicit ack, message dedupe by Nats-Msg-Id ('remote-task:<taskId>'). Postgres remains the real idempotency guard.
+/// JetStream file storage with WorkQueue retention, explicit ack, and message dedupe by Nats-Msg-Id ('remote-task:<taskId>'). Postgres remains the real idempotency guard.
 /// Service: dd-remote-rest-api
 pub const DD_REMOTE_TASKS_STREAM_NAME: &str = "DD_REMOTE_TASKS";
 pub const DD_REMOTE_TASKS_STREAM_SUBJECTS: &[&str] = &["dd.remote.thread.*.tasks"];
-pub const DD_REMOTE_TASKS_STREAM_RETENTION: &str = "limits";
+pub const DD_REMOTE_TASKS_STREAM_RETENTION: &str = "workqueue";
 pub const DD_REMOTE_TASKS_STREAM_STORAGE: &str = "file";
 pub const DD_REMOTE_TASKS_STREAM_ACK: &str = "explicit";
+
+/// Durable limits-retention stream for redacted terminal task failures. It is separate from DD_REMOTE_TASKS so dead letters cannot inflate queue-consumer lag or trigger KEDA scaling.
+/// Service: dd-remote-rest-api
+pub const DD_REMOTE_TASKS_DLQ_STREAM_NAME: &str = "DD_REMOTE_TASKS_DLQ";
+pub const DD_REMOTE_TASKS_DLQ_STREAM_SUBJECTS: &[&str] = &["dd.remote.thread.tasks.deadletter"];
+pub const DD_REMOTE_TASKS_DLQ_STREAM_RETENTION: &str = "limits";
+pub const DD_REMOTE_TASKS_DLQ_STREAM_STORAGE: &str = "file";
+pub const DD_REMOTE_TASKS_DLQ_STREAM_ACK: &str = "explicit";
