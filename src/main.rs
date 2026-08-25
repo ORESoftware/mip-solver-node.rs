@@ -11636,4 +11636,60 @@ mod tests {
         );
         assert_eq!(completed.len(), 1);
     }
+
+    #[test]
+    fn explicit_problem_id_is_trimmed_and_canonicalized() {
+        let uppercase = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE";
+
+        let parsed = problem_id(Some(format!("  {uppercase}  ")), "request-not-a-uuid").unwrap();
+
+        assert_eq!(parsed, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+        assert_eq!(
+            problem_id(Some("not-a-uuid".to_string()), "request-not-a-uuid"),
+            Err("problemId must be a UUID".to_string())
+        );
+    }
+
+    #[test]
+    fn missing_problem_id_reuses_uuid_request_id_or_generates_a_uuid() {
+        let request_uuid = "11111111-2222-4333-8444-555555555555";
+
+        assert_eq!(problem_id(None, request_uuid).unwrap(), request_uuid);
+        let generated = problem_id(None, "human-readable-request").unwrap();
+        assert_eq!(Uuid::parse_str(&generated).unwrap().get_version_num(), 4);
+    }
+
+    #[test]
+    fn retry_identifier_helpers_handle_plain_valid_and_malformed_suffixes() {
+        assert_eq!(job_retry_root("solve-7"), "solve-7");
+        assert_eq!(job_retry_index("solve-7"), 0);
+        assert_eq!(job_retry_root("solve-7-retry-3"), "solve-7");
+        assert_eq!(job_retry_index("solve-7-retry-3"), 3);
+        assert_eq!(job_retry_root("solve-7-retry-invalid"), "solve-7");
+        assert_eq!(job_retry_index("solve-7-retry-invalid"), 0);
+    }
+
+    #[test]
+    fn solve_errors_map_conflicts_dependencies_and_input_failures() {
+        assert_eq!(
+            solve_error_status("problem already has running solve"),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            solve_error_status("coordination lock busy"),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            solve_error_status("live-mutex request failed"),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            solve_error_status("Redis connection unavailable"),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            solve_error_status("objective contains a non-finite coefficient"),
+            StatusCode::BAD_REQUEST
+        );
+    }
 }
