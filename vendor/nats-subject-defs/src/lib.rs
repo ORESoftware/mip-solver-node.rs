@@ -3,7 +3,7 @@
 
 #![allow(clippy::needless_return)]
 
-pub const NATS_CONTRACT_FINGERPRINT: &str = "sha256:d4a06c5dfbbf35e1b46b24ecab5d597b3cd69d8946b718903184d639ce0dc9be";
+pub const NATS_CONTRACT_FINGERPRINT: &str = "sha256:2b00ab7021f06527d59d3446927332784657f7f3004af0462eda93f005c1687e";
 
 // ---------- Static subjects ----------
 
@@ -1251,6 +1251,84 @@ pub fn parse_thread_tasks_subject(subject: &str) -> Option<ThreadTasksSubjectPar
     })
 }
 
+/// Web-server request published for one org's API cluster. In-cluster producers JetStream-publish directly; the org's API replicas bind a durable consumer on the exact subject (not the wildcard). Payload is the web-api envelope in schema/envelope.schema.json. Dedupe with Nats-Msg-Id = envelope.dedupe_key.
+/// Service: web-api-data-plane
+pub const WEB_API_REQUEST_PATTERN: &str = "dd.remote.web_api.{org_slug}.request";
+pub const WEB_API_REQUEST_WILDCARD: &str = "dd.remote.web_api.*.request";
+pub const WEB_API_REQUEST_STREAM: &str = "DD_WEB_API_REQUESTS";
+pub fn web_api_request_subject(org_slug: &str) -> String {
+    format!("dd.remote.web_api.{}.request", org_slug)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebApiRequestSubjectParts {
+    pub org_slug: String,
+}
+
+pub fn parse_web_api_request_subject(subject: &str) -> Option<WebApiRequestSubjectParts> {
+    let pattern_tokens: &[&str] = &["dd", "remote", "web_api", "{org_slug}", "request"];
+    let subject_tokens: Vec<&str> = subject.split('.').collect();
+    let mut org_slug: Option<String> = None;
+    let mut si: usize = 0;
+    for tok in pattern_tokens.iter() {
+        if tok.starts_with('{') && tok.ends_with('}') {
+            if si >= subject_tokens.len() { return None; }
+            let name = &tok[1..tok.len()-1];
+            match name {
+                "org_slug" => { org_slug = Some(subject_tokens[si].to_string()); }
+                _ => return None,
+            }
+            si += 1;
+            continue;
+        }
+        if si >= subject_tokens.len() || subject_tokens[si] != *tok { return None; }
+        si += 1;
+    }
+    if si != subject_tokens.len() { return None; }
+    Some(WebApiRequestSubjectParts {
+        org_slug: org_slug?,
+    })
+}
+
+/// Asynchronous status/receipt fan-out for one org after the API consumes a request (pending→published→processing→succeeded|failed|dead_letter). Web servers subscribe to the exact org subject.
+/// Service: web-api-data-plane
+pub const WEB_API_STATUS_PATTERN: &str = "dd.remote.web_api.{org_slug}.status";
+pub const WEB_API_STATUS_WILDCARD: &str = "dd.remote.web_api.*.status";
+pub const WEB_API_STATUS_STREAM: &str = "DD_WEB_API_STATUS";
+pub fn web_api_status_subject(org_slug: &str) -> String {
+    format!("dd.remote.web_api.{}.status", org_slug)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebApiStatusSubjectParts {
+    pub org_slug: String,
+}
+
+pub fn parse_web_api_status_subject(subject: &str) -> Option<WebApiStatusSubjectParts> {
+    let pattern_tokens: &[&str] = &["dd", "remote", "web_api", "{org_slug}", "status"];
+    let subject_tokens: Vec<&str> = subject.split('.').collect();
+    let mut org_slug: Option<String> = None;
+    let mut si: usize = 0;
+    for tok in pattern_tokens.iter() {
+        if tok.starts_with('{') && tok.ends_with('}') {
+            if si >= subject_tokens.len() { return None; }
+            let name = &tok[1..tok.len()-1];
+            match name {
+                "org_slug" => { org_slug = Some(subject_tokens[si].to_string()); }
+                _ => return None,
+            }
+            si += 1;
+            continue;
+        }
+        if si >= subject_tokens.len() || subject_tokens[si] != *tok { return None; }
+        si += 1;
+    }
+    if si != subject_tokens.len() { return None; }
+    Some(WebApiStatusSubjectParts {
+        org_slug: org_slug?,
+    })
+}
+
 /// Deliver an external signal to a running workflow. Producers publish to the specific run token; the engine appends the signal to the run and wakes any waitSignal step. Payload is {"name": "approved", "payload"?: any}. Default for NATS_WORKFLOW_SIGNAL_SUBJECT='dd.remote.workflows.signal.*'.
 /// Service: dd-gleam-lambda-runner
 pub const WORKFLOWS_SIGNAL_PATTERN: &str = "dd.remote.workflows.signal.{run_id}";
@@ -1505,3 +1583,19 @@ pub const DD_REMOTE_TASKS_DLQ_STREAM_SUBJECTS: &[&str] = &["dd.remote.thread.tas
 pub const DD_REMOTE_TASKS_DLQ_STREAM_RETENTION: &str = "limits";
 pub const DD_REMOTE_TASKS_DLQ_STREAM_STORAGE: &str = "file";
 pub const DD_REMOTE_TASKS_DLQ_STREAM_ACK: &str = "explicit";
+
+/// Work-queue JetStream intake for web→API envelopes. Each org's API server binds durable name dd-web-api-{org_slug} on the exact request subject. Dedupe by Nats-Msg-Id. File storage, explicit ack.
+/// Service: web-api-data-plane
+pub const DD_WEB_API_REQUESTS_STREAM_NAME: &str = "DD_WEB_API_REQUESTS";
+pub const DD_WEB_API_REQUESTS_STREAM_SUBJECTS: &[&str] = &["dd.remote.web_api.*.request"];
+pub const DD_WEB_API_REQUESTS_STREAM_RETENTION: &str = "workqueue";
+pub const DD_WEB_API_REQUESTS_STREAM_STORAGE: &str = "file";
+pub const DD_WEB_API_REQUESTS_STREAM_ACK: &str = "explicit";
+
+/// Limits-retention fan-out of per-org asynchronous receipts. Not a work queue so every interested web replica can observe status.
+/// Service: web-api-data-plane
+pub const DD_WEB_API_STATUS_STREAM_NAME: &str = "DD_WEB_API_STATUS";
+pub const DD_WEB_API_STATUS_STREAM_SUBJECTS: &[&str] = &["dd.remote.web_api.*.status"];
+pub const DD_WEB_API_STATUS_STREAM_RETENTION: &str = "limits";
+pub const DD_WEB_API_STATUS_STREAM_STORAGE: &str = "file";
+pub const DD_WEB_API_STATUS_STREAM_ACK: &str = "explicit";
