@@ -25,15 +25,24 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify the reviewed vendored Rust binding digest
+        run: >-
+          echo
+          'bda4309bbd327962081570a54307accd413582beedfb43b65edfa5a2cb590392  vendor/nats-subject-defs/src/lib.rs'
+          | sha256sum --check --strict -
+
       - name: Check out the canonical NATS contract
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: ORESoftware/k8s-libs-and-shared-defs
           ref: main
           path: .ci/k8s-libs-and-shared-defs
           persist-credentials: false
+          token: ${{ secrets.NATS_CONTRACT_READ_TOKEN }}
 
       - name: Reject a stale vendored Rust binding
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: >-
           cmp
           vendor/nats-subject-defs/src/lib.rs
