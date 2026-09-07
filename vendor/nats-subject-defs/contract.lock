@@ -1,0 +1,10 @@
+format=ores.nats-contract-lock.v1
+source_repository=ORESoftware/k8s-libs-and-shared-defs
+source_ref=main
+source_commit=e90e48f1a14c6e9aa7b6d591bb50d81e61482974
+source_path=nats/subject-defs/generated/rust/src/lib.rs
+source_blob_sha1=00e0289d0a19e0aae0531327c268eab5606c2953
+content_sha256=bda4309bbd327962081570a54307accd413582beedfb43b65edfa5a2cb590392
+contract_fingerprint=sha256:2b00ab7021f06527d59d3446927332784657f7f3004af0462eda93f005c1687e
+rust_toolchain=1.85.0
+vendored_path=vendor/nats-subject-defs/src/lib.rs
