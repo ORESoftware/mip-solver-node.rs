@@ -86,7 +86,7 @@ valid_root() {
 expect_ok() {
   local name=$1
   local root=$2
-  NATS_CONTRACT_ROOT="$root" "$checker" > "${root}/result.log" 2>&1 || {
+  NATS_CONTRACT_ROOT="$root" bash "$checker" > "${root}/result.log" 2>&1 || {
     cat "${root}/result.log" >&2
     fail "expected success: ${name}"
   }
@@ -102,11 +102,11 @@ expect_fail() {
 
   if [[ -n "$lock_relative" ]]; then
     if NATS_CONTRACT_ROOT="$root" NATS_CONTRACT_LOCK_FILE="$lock_relative" \
-      "$checker" > "${root}/result.log" 2>&1; then
+      bash "$checker" > "${root}/result.log" 2>&1; then
       cat "${root}/result.log" >&2
       fail "expected failure: ${name}"
     fi
-  elif NATS_CONTRACT_ROOT="$root" "$checker" > "${root}/result.log" 2>&1; then
+  elif NATS_CONTRACT_ROOT="$root" bash "$checker" > "${root}/result.log" 2>&1; then
     cat "${root}/result.log" >&2
     fail "expected failure: ${name}"
   fi
