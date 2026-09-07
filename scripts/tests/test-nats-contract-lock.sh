@@ -28,15 +28,21 @@ new_root() {
   printf '%s\n' "$root"
 }
 
-write_binding() {
-  local root=$1
+write_binding_at() {
+  local path=$1
   local fingerprint=${2:-$expected_fingerprint}
-  cat > "${root}/vendor/nats-subject-defs/src/lib.rs" <<EOF
+  cat > "$path" <<EOF
 // generated fixture
 #![allow(clippy::needless_return)]
 pub const NATS_CONTRACT_FINGERPRINT: &str = "${fingerprint}";
 pub const MIP_SOLVER_REQUESTS_SUBJECT: &str = "dd.remote.mip_solver.requests";
 EOF
+}
+
+write_binding() {
+  local root=$1
+  local fingerprint=${2:-$expected_fingerprint}
+  write_binding_at "${root}/vendor/nats-subject-defs/src/lib.rs" "$fingerprint"
 }
 
 write_lock() {
@@ -92,10 +98,19 @@ expect_fail() {
   local name=$1
   local root=$2
   local message=$3
-  if NATS_CONTRACT_ROOT="$root" "$checker" > "${root}/result.log" 2>&1; then
+  local lock_relative=${4:-}
+
+  if [[ -n "$lock_relative" ]]; then
+    if NATS_CONTRACT_ROOT="$root" NATS_CONTRACT_LOCK_FILE="$lock_relative" \
+      "$checker" > "${root}/result.log" 2>&1; then
+      cat "${root}/result.log" >&2
+      fail "expected failure: ${name}"
+    fi
+  elif NATS_CONTRACT_ROOT="$root" "$checker" > "${root}/result.log" 2>&1; then
     cat "${root}/result.log" >&2
     fail "expected failure: ${name}"
   fi
+
   grep -Fq -- "$message" "${root}/result.log" || {
     cat "${root}/result.log" >&2
     fail "wrong failure for ${name}; expected '${message}'"
@@ -173,18 +188,14 @@ expect_fail 'tampered binding' "$root" 'content SHA-256 mismatch'
 
 root=$(valid_root)
 cp "${root}/vendor/nats-subject-defs/contract.lock" "${root}/reviewed.lock"
-: > "${root}/vendor/nats-subject-defs/contract.lock"
 ln -s "${root}/reviewed.lock" "${root}/linked.lock"
-NATS_CONTRACT_LOCK_FILE=linked.lock expect_fail 'symlink lock' "$root" 'lock file must not be a symbolic link'
+expect_fail 'symlink lock' "$root" 'lock file must not be a symbolic link' 'linked.lock'
 
 root=$(new_root)
-write_binding "$root"
+write_binding_at "${root}/binding.rs"
+ln -s "${root}/binding.rs" "${root}/vendor/nats-subject-defs/src/lib.rs"
 write_lock "$root"
-cp "${root}/vendor/nats-subject-defs/src/lib.rs" "${root}/binding.rs"
-: > "${root}/vendor/nats-subject-defs/src/lib.rs"
-ln -s "${root}/binding.rs" "${root}/linked-binding.rs"
-write_lock "$root" 'ORESoftware/k8s-libs-and-shared-defs' 'main' "$expected_commit" 'nats/subject-defs/generated/rust/src/lib.rs' '' '' "$expected_fingerprint" '1.85.0' 'linked-binding.rs'
-expect_fail 'symlink or alternate binding path' "$root" 'unexpected vendored path'
+expect_fail 'symlink binding' "$root" 'vendored binding must not be a symbolic link'
 
 root=$(new_root)
 write_binding "$root"
