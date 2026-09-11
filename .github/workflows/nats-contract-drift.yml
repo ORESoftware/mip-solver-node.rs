@@ -15,24 +15,83 @@ concurrency:
   group: nats-contract-drift-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DES_ENGINE_COMMIT: 69f9a97ec4735dd07ad7133681135e561cdabb06
+
 jobs:
-  canonical-rust-binding:
+  vendored-contract:
+    name: Hermetic vendored contract and Rust tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Check out the reviewed MIP solver source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
 
-      - name: Verify the reviewed vendored Rust binding digest
-        run: >-
-          echo
-          'bda4309bbd327962081570a54307accd413582beedfb43b65edfa5a2cb590392  vendor/nats-subject-defs/src/lib.rs'
-          | sha256sum --check --strict -
+      - name: Verify lock-checker shell syntax
+        run: |
+          bash -n scripts/check-nats-contract-lock.sh
+          bash -n scripts/tests/test-nats-contract-lock.sh
 
-      - name: Check out the canonical NATS contract
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      - name: Run adversarial lock regressions
+        run: bash scripts/tests/test-nats-contract-lock.sh
+
+      - name: Verify reviewed local binding provenance
+        run: bash scripts/check-nats-contract-lock.sh
+
+      - name: Install the contract's minimum Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.85.0
+
+      - name: Compile the synchronized vendored crate at its minimum Rust version
+        run: cargo +1.85.0 check --manifest-path vendor/nats-subject-defs/Cargo.toml --locked
+
+      - name: Fetch the exact discrete-event dependency revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=../../submodules/discrete-event-system.rs
+          mkdir -p "$target"
+          git -C "$target" init
+          git -C "$target" remote add origin https://github.com/ORESoftware/discrete-event-system.rs
+          git -C "$target" fetch --depth=1 origin "$DES_ENGINE_COMMIT"
+          git -C "$target" checkout --detach FETCH_HEAD
+          test "$(git -C "$target" rev-parse HEAD)" = "$DES_ENGINE_COMMIT"
+
+      - name: Install the application's locked Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.88.0
+
+      - name: Run all locked Rust tests, including DEN-679 metrics coverage
+        run: cargo +1.88.0 test --locked
+
+  canonical-current-main-drift:
+    name: Private canonical current-main drift
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: vendored-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NATS_CONTRACT_READ_TOKEN: ${{ secrets.NATS_CONTRACT_READ_TOKEN }}
+    steps:
+      - name: Require the least-privilege canonical-source credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${NATS_CONTRACT_READ_TOKEN:-}" ]]; then
+            printf '%s\n' 'NATS contract drift blocked: NATS_CONTRACT_READ_TOKEN is unavailable.' >&2
+            exit 1
+          fi
+
+      - name: Check out the reviewed MIP solver source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check out the canonical NATS contract current main
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: ORESoftware/k8s-libs-and-shared-defs
@@ -41,17 +100,19 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.NATS_CONTRACT_READ_TOKEN }}
 
-      - name: Reject a stale vendored Rust binding
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: >-
-          cmp
-          vendor/nats-subject-defs/src/lib.rs
-          .ci/k8s-libs-and-shared-defs/nats/subject-defs/generated/rust/src/lib.rs
+      - name: Reject current-main drift and emit a content-free receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_path=vendor/nats-subject-defs/src/lib.rs
+          canonical_path=.ci/k8s-libs-and-shared-defs/nats/subject-defs/generated/rust/src/lib.rs
+          cmp "$local_path" "$canonical_path"
 
-      - name: Install the contract's minimum Rust toolchain
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
-        with:
-          toolchain: 1.85.0
+          locked_blob=$(awk -F= '$1 == "source_blob_sha1" { print $2 }' vendor/nats-subject-defs/contract.lock)
+          local_blob=$(git hash-object -- "$local_path")
+          canonical_blob=$(git -C .ci/k8s-libs-and-shared-defs hash-object -- nats/subject-defs/generated/rust/src/lib.rs)
+          canonical_commit=$(git -C .ci/k8s-libs-and-shared-defs rev-parse HEAD)
 
-      - name: Compile the synchronized vendored crate
-        run: cargo check --manifest-path vendor/nats-subject-defs/Cargo.toml --locked
+          test "$local_blob" = "$locked_blob"
+          test "$canonical_blob" = "$locked_blob"
+          printf 'canonical-current-main: ok commit=%s blob=%s\n' "$canonical_commit" "$canonical_blob"

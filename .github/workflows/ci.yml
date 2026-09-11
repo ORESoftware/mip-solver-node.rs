@@ -8,16 +8,39 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DES_ENGINE_COMMIT: 69f9a97ec4735dd07ad7133681135e561cdabb06
+
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - name: Check out k8s-cluster sibling dependency
+      - name: Check out the reviewed MIP solver source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch the exact discrete-event dependency revision
+        shell: bash
         run: |
-          mkdir -p ../../submodules
-          git clone --depth 1 https://github.com/ORESoftware/discrete-event-system.rs \
-            ../../submodules/discrete-event-system.rs
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --locked
+          set -euo pipefail
+          target=../../submodules/discrete-event-system.rs
+          mkdir -p "$target"
+          git -C "$target" init
+          git -C "$target" remote add origin https://github.com/ORESoftware/discrete-event-system.rs
+          git -C "$target" fetch --depth=1 origin "$DES_ENGINE_COMMIT"
+          git -C "$target" checkout --detach FETCH_HEAD
+          test "$(git -C "$target" rev-parse HEAD)" = "$DES_ENGINE_COMMIT"
+
+      - name: Install the locked application Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.88.0
+
+      - name: Run locked Rust tests
+        run: cargo +1.88.0 test --locked
